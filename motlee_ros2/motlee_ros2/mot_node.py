@@ -49,6 +49,7 @@ class MultiObjectTrackerNode(Node):
 
         # MOT setup
         self.mot = MultiObjectTracker(camera_id=robot_id, connected_cams=[], params=mot_params)
+        self.last_t = None
         
         # eventually publish and subscribe to other nodes
         self.track_publisher = self.create_publisher(TrackStateArray, 'tracks', 10)
@@ -86,7 +87,6 @@ class MultiObjectTrackerNode(Node):
         self.mot.dkf()
         self.mot.track_manager()
         
-        
         # tracks_msg = TrackStateArray()
         # for track in self.tracks:
         #     tracks_msg.tracks.append(track.state_msg())
@@ -105,6 +105,8 @@ class MultiObjectTrackerNode(Node):
 
         tracks_msg = TrackStateArray()
         tracks_msg.header.frame_id = 'world'
+        tracks_msg.header.stamp.sec = int(self.last_t)
+        tracks_msg.header.stamp.nanosec = int((self.last_t % 1) * 10**9)
         for track in self.mot.tracks:
             track_state = TrackState()
             track_state.track_id.robot_id, track_state.track_id.track_id = track.id
@@ -112,8 +114,7 @@ class MultiObjectTrackerNode(Node):
             track_state.velocity.x, track_state.velocity.y = track.state.item(2), track.state.item(3)
             tracks_msg.tracks.append(track_state)
         self.track_publisher.publish(tracks_msg)
-        
-    
+            
     def pose_cb(self, msg):
         '''
         Saves most recent pose estimate.
@@ -131,10 +132,12 @@ class MultiObjectTrackerNode(Node):
             pose.orientation.z,
             pose.orientation.w,
         ])
+        self.last_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9)
         return
     
     def dets_cb(self, msg):
         # wait for initial pose estimate
+        # self.last_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9)
         if self.pose is None:
             return
         self.detections = []

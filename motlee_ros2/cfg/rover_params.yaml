@@ -1,0 +1,12 @@
+RR01:
+  mot:
+    ros__parameters:
+      tau_local: 1.0
+      tau_global: .75
+      alpha: 2000
+      kappa: 4
+      n_meas_to_init_track: 3
+      robot_id: 1
+      pose_from_odom: False
+      pose_topic: "/RR01/world"
+      mot_dt: .01

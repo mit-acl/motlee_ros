@@ -1,0 +1,11 @@
+mot:
+  ros__parameters:
+    tau_local: 1.2
+    tau_global: .75
+    alpha: 2000
+    kappa: 20
+    n_meas_to_init_track: 3
+    robot_id: 1
+    pose_from_odom: True
+    pose_topic: "/t265/odom/sample"
+    mot_dt: .1
