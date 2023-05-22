@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.linalg import norm, inv
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.transform import Rotation as Rot
 
@@ -32,7 +33,7 @@ class MultiObjectTrackerNode(Node):
                 ('robot_id', 0),
                 ('pose_from_odom', True),
                 ('pose_topic', '/t265/odom/sample'),
-                ('mot_dt', .1)
+                ('mot_dt', .04)
             ]
         )
         
@@ -49,7 +50,6 @@ class MultiObjectTrackerNode(Node):
 
         # MOT setup
         self.mot = MultiObjectTracker(camera_id=robot_id, connected_cams=[], params=mot_params)
-        self.last_t = None
         
         # eventually publish and subscribe to other nodes
         self.track_publisher = self.create_publisher(TrackStateArray, 'tracks', 10)
@@ -64,8 +64,14 @@ class MultiObjectTrackerNode(Node):
         # TODO: Eventually, I would like MOT node to not know about its pose and have another node listen to
         # detections and republish them after transforming them
         
-        self.pose = None
+        self.poses = []
+        self.pose_times = []
+        self.max_pose_len = 100
+
         self.detections = []
+        self.detections_Rs = []
+        self.detections_t = None
+
         self.T_BC = np.array([
             [0, 0, 1, 0],
             [-1, 0, 0, 0],
@@ -74,10 +80,13 @@ class MultiObjectTrackerNode(Node):
         ], dtype=np.float64)
 
     def timer_cb(self):
-        if self.pose is None:
+        '''
+        Track prediction, detection data association, and measurement updates.
+        '''
+        if len(self.poses) == 0 or self.detections_t is None:
             return
-        self.mot.local_data_association(self.detections, feature_vecs=np.arange(len(self.detections)))
-        self.detections = []
+        self.mot.local_data_association(self.detections, feature_vecs=np.arange(len(self.detections)), Rs=self.detections_Rs)
+        self.detections, self.detections_Rs = [], []
         # TODO: get feature vecs out of here
         
         # TODO: I think I will do the add observations before running the next cycle of local da, so the local da should really
@@ -86,27 +95,22 @@ class MultiObjectTrackerNode(Node):
         self.mot.add_observations([obs for obs in observations if  obs.destination == self.mot.camera_id])
         self.mot.dkf()
         self.mot.track_manager()
-        
-        # tracks_msg = TrackStateArray()
-        # for track in self.tracks:
-        #     tracks_msg.tracks.append(track.state_msg())
-        # self.track_publisher.publish(tracks_msg)
 
-        pose_array = PoseArray()
-        pose_array.header.frame_id = 'world'
+        track_pose_array = PoseArray()
+        track_pose_array.header.frame_id = 'world'
         for track in self.mot.tracks:
-            pose = Pose()
-            pose.position.x, pose.position.y = track.state.item(0), track.state.item(1)
+            track_pose = Pose()
+            track_pose.position.x, track_pose.position.y = track.state.item(0), track.state.item(1)
             # theta = np.arctan2(track.state.item(3), track.state.item(2))
             # pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = \
             #     Rot.from_euler('xyz', [0, 0, theta]).as_quat().tolist()
-            pose_array.poses.append(pose)
-        self.track_poses_publisher.publish(pose_array)
+            track_pose_array.poses.append(track_pose)
+        self.track_poses_publisher.publish(track_pose_array)
 
         tracks_msg = TrackStateArray()
         tracks_msg.header.frame_id = 'world'
-        tracks_msg.header.stamp.sec = int(self.last_t)
-        tracks_msg.header.stamp.nanosec = int((self.last_t % 1) * 10**9)
+        tracks_msg.header.stamp.sec = int(self.detections_t)
+        tracks_msg.header.stamp.nanosec = int((self.detections_t % 1) * 10**9)
         for track in self.mot.tracks:
             track_state = TrackState()
             track_state.track_id.robot_id, track_state.track_id.track_id = track.id
@@ -123,7 +127,7 @@ class MultiObjectTrackerNode(Node):
             pose = msg.pose
         elif type(msg) == Odometry:
             pose = msg.pose.pose
-        self.pose = np.array([
+        pose = np.array([
             pose.position.x,
             pose.position.y,
             pose.position.z,
@@ -132,30 +136,57 @@ class MultiObjectTrackerNode(Node):
             pose.orientation.z,
             pose.orientation.w,
         ])
-        self.last_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9)
+        self.poses.append(pose)
+        self.pose_times.append(msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9))
+
+        self.poses = self.poses[-self.max_pose_len:]
+        self.pose_times = self.pose_times[-self.max_pose_len:]
+        # print(self.poses[0])
+        
         return
     
     def dets_cb(self, msg):
         # wait for initial pose estimate
         # self.last_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9)
-        if self.pose is None:
+        if len(self.poses) == 0:
             return
+        self.detections_t = msg.header.stamp.sec + msg.header.stamp.nanosec * 10**(-9)
         self.detections = []
         for detection in msg.detections:
             position_c = np.array([detection.pose.pose.position.x, 
                                     detection.pose.pose.position.y, 
                                     detection.pose.pose.position.z])
             position_b = transform(self.T_BC, position_c)
-            T_LB = pos_quat_to_transform(self.pose[:3], self.pose[3:])
+            
+            # find the pose with the closest timestamp to the object detections
+            pose_times = np.array(self.pose_times)
+            ge_list = np.where(pose_times >= self.detections_t)[0]
+            lt_list = np.where(pose_times < self.detections_t)[0]
+            
+            assert len(ge_list) > 0 or len(lt_list) > 0, f'detection_time: {self.detections_t}\npose_times: {pose_times}'
+            if len(ge_list) == 0:
+                pose_idx = lt_list[-1]
+            elif len(lt_list) == 0:
+                pose_idx = ge_list[0]
+            else:
+                if np.abs(self.detections_t - self.pose_times[ge_list[0]]) < \
+                    np.abs(self.detections_t - self.pose_times[lt_list[-1]]):
+                    pose_idx = ge_list[0]
+                else:
+                    pose_idx = lt_list[-1]
+            pose = self.poses[pose_idx]
+            
+            T_LB = pos_quat_to_transform(pose[:3], pose[3:])
             position_ell = transform(T_LB, position_b)
             self.detections.append(position_ell[:2].reshape((2, 1)))
+
+            # Covariance
+            obj_dist = norm(position_b)
+            sigma_sq = 1.0 + (obj_dist > 10.0) * 0.2 * (obj_dist - 10.0)
+            R = np.diag([sigma_sq, sigma_sq])
+            self.detections_Rs.append(R)
             #TODO: send out detections here
             # print(position_ell)
-            
-        # p = PoseArray()
-        # for pos in self.detections:
-        #     pose = Pose()
-        #     pose.position.x = pos
             
         return
 
