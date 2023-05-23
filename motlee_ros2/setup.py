@@ -24,7 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'mot_node = motlee_ros2.mot_node:main'
+            'mot_node = motlee_ros2.mot_node:main',
+            'track_viewer_node = motlee_ros2.track_viewer_node:main'
         ],
     },
 )

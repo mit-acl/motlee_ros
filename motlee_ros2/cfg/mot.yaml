@@ -1,6 +1,6 @@
 mot:
   ros__parameters:
-    tau_local: 2.0
+    tau_local: 1.5
     tau_global: .75
     alpha: 2000
     kappa: 20
