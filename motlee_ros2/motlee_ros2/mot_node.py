@@ -13,7 +13,8 @@ from centertrack_msgs.msg import ObjDet3DArray
 from motlee_msgs.msg import TrackStateArray, TrackState
 
 from motlee.mot.multi_object_tracker import MultiObjectTracker
-import motlee.config.rover_mot_params as mot_params
+from motlee.config.rover_mot_params import RoverMOTParams
+from motlee.config.track_params import TrackParams
 from motlee.utils.transform import transform, pos_quat_to_transform
 
 class MultiObjectTrackerNode(Node):
@@ -37,6 +38,7 @@ class MultiObjectTrackerNode(Node):
             ]
         )
         
+        mot_params = RoverMOTParams()
         mot_params.Tau_LDA = self.get_parameter('tau_local').value
         mot_params.Tau_GDA = self.get_parameter('tau_global').value
         mot_params.alpha = self.get_parameter('alpha').value
@@ -49,7 +51,7 @@ class MultiObjectTrackerNode(Node):
         print(f'MOT dt: {timer_period}')
 
         # MOT setup
-        self.mot = MultiObjectTracker(camera_id=robot_id, connected_cams=[], params=mot_params)
+        self.mot = MultiObjectTracker(camera_id=robot_id, connected_cams=[], params=mot_params, track_params=TrackParams())
         
         # eventually publish and subscribe to other nodes
         self.track_publisher = self.create_publisher(TrackStateArray, 'tracks', 10)
