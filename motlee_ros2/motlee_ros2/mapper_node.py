@@ -35,7 +35,7 @@ class MapperNode(Node):
                 ('n_meas_to_init_track', 3),
                 ('robot_id', 0),
                 ('pose_from_odom', True),
-                ('pose_topic', '/t265/odom/sample'),
+                ('pose_topic', 't265/odom/sample'),
                 ('obj_names', [
                     'traffic light',
                     'fire hydrant', 
@@ -56,7 +56,7 @@ class MapperNode(Node):
         mot_params.kappa = self.get_parameter('kappa').value
         mot_params.n_meas_to_init_track = self.get_parameter('n_meas_to_init_track').value
         robot_id = self.get_parameter('robot_id').value
-        pose_from_odom = self.get_parameter('pose_from_odom').value
+        self.pose_from_odom = self.get_parameter('pose_from_odom').value
         pose_topic = self.get_parameter('pose_topic').value
         self.obj_names = self.get_parameter('obj_names').value
 
@@ -73,7 +73,7 @@ class MapperNode(Node):
         self.pub_map = self.create_publisher(ObjArray, 'object_map', 10)
         self.pub_map_poses_only = self.create_publisher(PoseArray, 'object_map/poses_only', 10)
         
-        pose_type = Odometry if pose_from_odom else PoseStamped
+        pose_type = Odometry if self.pose_from_odom else PoseStamped
         subs = []
         subs.append(message_filters.Subscriber(self, pose_type, pose_topic)) # odometry
         subs.append(message_filters.Subscriber(self, ObjArray, f'detections/static'))
@@ -81,11 +81,10 @@ class MapperNode(Node):
         self.time_sync.registerCallback(self.dets_cb)
     
     def dets_cb(self, *msgs):
-        # print('cb')
         pose_msg = msgs[0]
         dets_msg = msgs[1]
         
-        T_WB = pose_msg_2_T(pose_msg.pose.pose)
+        T_WB = pose_msg_2_T(pose_msg.pose.pose if self.pose_from_odom else pose_msg.pose)
         R_WB = T_WB[:3,:3]
         # T_WC = T_WB @ T_FLURDF
         dets = [transform(T_WB, np.array([[det.position.x], [det.position.y], [det.position.z]]))[:2,:] for det in dets_msg.objects]
@@ -130,6 +129,7 @@ class MapperNode(Node):
                 pose.orientation.z, pose.orientation.w = \
                 Rot.from_euler('xyz', [0., -90., 0.], degrees=True).as_quat()
             map_poses_only.poses.append(pose)
+        self.pub_map_poses_only.publish(map_poses_only)
 
         return
 
