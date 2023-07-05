@@ -31,6 +31,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TrackState.msg"
   "msg/TrackStateArray.msg"
   "msg/KCFUpdate.msg"
+  "msg/Obj.msg"
+  "msg/ObjArray.msg"
   DEPENDENCIES geometry_msgs 
 )
 

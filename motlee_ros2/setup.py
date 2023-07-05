@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'mot_node = motlee_ros2.mot_node:main',
-            'track_viewer_node = motlee_ros2.track_viewer_node:main'
+            'track_viewer_node = motlee_ros2.track_viewer_node:main',
+            'mapper_node = motlee_ros2.mapper_node:main'
         ],
     },
 )
