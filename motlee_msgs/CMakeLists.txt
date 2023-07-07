@@ -33,6 +33,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/KCFUpdate.msg"
   "msg/Obj.msg"
   "msg/ObjArray.msg"
+  "msg/SE3Transform.msg"
   DEPENDENCIES geometry_msgs 
 )
 
