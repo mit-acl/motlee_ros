@@ -43,7 +43,7 @@ class TrackViewerNode(Node):
         # private vars
         self.tracks = dict()
         self.t = None
-        self.brige = cv_bridge.CvBridge()
+        self.bridge = cv_bridge.CvBridge()
 
         # publishers / subscribers
         self.pub_trackimg = self.create_publisher(Image, 'tracks/image_raw', 1)     
@@ -76,7 +76,7 @@ class TrackViewerNode(Node):
         ego_pose[2] = 1.0 if 'd435' in self.camera_prefix else 1.5
         T_lb = pos_quat_to_transform(ego_pose[:3], ego_pose[3:])
         
-        img = self.brige.compressed_imgmsg_to_cv2(img_compressed, desired_encoding='bgr8')
+        img = self.bridge.compressed_imgmsg_to_cv2(img_compressed, desired_encoding='bgr8')
 
         # Add local coordinates to track state
         for track in tracks.tracks:
@@ -118,7 +118,7 @@ class TrackViewerNode(Node):
 
                 pixels_iminus = deepcopy(pixels_i)
 
-        imgmsg = self.brige.cv2_to_imgmsg(img, encoding='bgr8')
+        imgmsg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
         imgmsg.header = img_compressed.header
         self.pub_trackimg.publish(imgmsg)
         
