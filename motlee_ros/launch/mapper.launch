@@ -4,10 +4,17 @@
   <arg name="tau" default="2.0" />
   <arg name="kappa" default="200" />
   <arg name="frame_align_ts" default="1" />
+  <arg name="visualize_map" default="false" />
 
   <node respawn="false" name="mapper" pkg="motlee_ros" type="mapper_node.py" output="screen" ns="$(arg quad)">
     <param name="tau" value="$(arg tau)" />
     <param name="kappa" value="$(arg kappa)" />
   </node>
+
+  <group if="$(arg visualize_map)">
+    <include file="$(find motlee_ros)/launch/map_visualizer.launch">
+        <arg name="quad" value="$(arg quad)"/>
+     </include> 
+  </group>
 
 </launch>
