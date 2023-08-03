@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 
-import sys
-import pathlib
-
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 
-import cv_bridge
 import message_filters
 import rospy
 
@@ -21,10 +17,9 @@ from utils import pose_msg_2_T
 
 class Mapper:
     def __init__(self):
-        self.bridge = cv_bridge.CvBridge()
         
         # ROS Parameters
-        robot_id = rospy.get_param("~robot_id", 0.)
+        robot_id = rospy.get_param("~robot_id", "0")
         Q = rospy.get_param("~Q", [[.25**2, 0.], [0., .25**2]]) # process noise covariance
         P0 = rospy.get_param("~P0", [[.5**2, 0.], [0., .5**2]]) # initial estimate covariance
         tau = rospy.get_param("~tau", 2.) # mahalanobis distance gate for landmark data association
