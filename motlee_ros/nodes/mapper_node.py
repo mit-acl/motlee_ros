@@ -44,27 +44,19 @@ class Mapper:
         )
 
         # ROS communication
-        subs = []
-        subs.append(message_filters.Subscriber('pose', geometry_msgs.PoseStamped, queue_size=100))
-        subs.append(message_filters.Subscriber('detections', motlee_msgs.ObjArray, queue_size=2))
-        self.ats = message_filters.ApproximateTimeSynchronizer(subs, queue_size=100, slop=.05)
-        self.ats.registerCallback(self.det_cb)
+        self.sub_det = rospy.Subscriber('detections', motlee_msgs.ObjArray, queue_size=2)
         self.pub_map = rospy.Publisher('map', motlee_msgs.ObjArray, queue_size=10)
         self.pub_map_poses_only = rospy.Publisher('map/poses_only', geometry_msgs.PoseArray, queue_size=10)
 
-    def det_cb(self, pose_msg, dets_msg):
+    def det_cb(self, dets_msg):
         """Detection callback - incorporates new measurements into map
 
         Args:
-            pose_msg (geometry_msgs/PoseStamped): T_WB, robot body pose w/ respect to world frame
-            dets_msg (motlee_msgs/ObjArray): landmark measurements and covariances in body frame
+            dets_msg (motlee_msgs/ObjArray): landmark measurements and covariances in world frame
         """
         
-        T_WB = pose_msg_2_T(pose_msg.pose)
-        R_WB = T_WB[:3,:3]
-        # T_WC = T_WB @ T_FLURDF
-        dets = [transform(T_WB, np.array([[det.position.x], [det.position.y], [det.position.z]]))[:self.dim,:] for det in dets_msg.objects]
-        Rs = [(R_WB @ np.array(obj.covariance).reshape((3,3)) @ R_WB.T)[:2,:2] for obj in dets_msg.objects]
+        dets = [np.array([[det.position.x], [det.position.y], [det.position.z]])[:self.dim,:] for det in dets_msg.objects]
+        Rs = [np.array(obj.covariance).reshape((3,3))[:self.dim,:self.dim] for obj in dets_msg.objects]
         
         self.mapper.local_data_association(
             [det for det in dets], 
