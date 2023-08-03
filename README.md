@@ -4,7 +4,7 @@ ROS package for running MOTLEE frame alignment
 
 # Install
 
-Prereqs: [MOTLEE](https://gitlab.com/mit-acl/dmot/motlee) and (CLIPPER)(https://github.com/mit-acl/clipper)
+Prereqs: [MOTLEE](https://gitlab.com/mit-acl/dmot/motlee) and [CLIPPER](https://github.com/mit-acl/clipper)
 
 # Node Architecture
 
