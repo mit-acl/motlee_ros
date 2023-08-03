@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="quad" default="SQ01s" />
+  <arg name="tau" default="2.0" />
+  <arg name="kappa" default="200" />
+  <arg name="frame_align_ts" default="1" />
+
+  <node respawn="false" name="mapper" pkg="motlee_ros" type="mapper_node.py" output="screen" ns="$(arg quad)">
+    <param name="tau" value="$(arg tau)" />
+    <param name="kappa" value="$(arg kappa)" />
+  </node>
+
+</launch>

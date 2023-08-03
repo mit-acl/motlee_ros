@@ -44,7 +44,7 @@ class Mapper:
         )
 
         # ROS communication
-        self.sub_det = rospy.Subscriber('detections', motlee_msgs.ObjArray, queue_size=2)
+        self.sub_det = rospy.Subscriber('detections', motlee_msgs.ObjArray, self.det_cb, queue_size=2)
         self.pub_map = rospy.Publisher('map', motlee_msgs.ObjArray, queue_size=10)
         self.pub_map_poses_only = rospy.Publisher('map/poses_only', geometry_msgs.PoseArray, queue_size=10)
 
@@ -66,7 +66,7 @@ class Mapper:
         self.mapper.track_manager()
         
         map = motlee_msgs.ObjArray()
-        map.header = pose_msg.header
+        map.header = dets_msg.header
 
         for landmark in self.mapper.tracks:
             obj = motlee_msgs.Obj()
@@ -80,7 +80,7 @@ class Mapper:
         self.pub_map.publish(map)
         
         map_poses_only = geometry_msgs.PoseArray()
-        map_poses_only.header = pose_msg.header
+        map_poses_only.header = dets_msg.header
         for obj in map.objects:
             pose = geometry_msgs.Pose()
             pose.position = obj.position
