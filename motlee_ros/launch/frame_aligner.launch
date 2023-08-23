@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="quad1" default="SQ01s" />
+  <arg name="quad2" default="SQ02s" />
+  <arg name="tau" default="2.0" />
+  <arg name="kappa" default="200" />
+  <arg name="frame_align_ts" default="1" />
+
+  <node respawn="false" name="frame_aligner" pkg="motlee_ros" type="frame_align_node.py" output="screen" ns="$(arg quad1)">
+    <param name="robot_id" value="$(arg quad1)" />
+    <param name="ts" value="$(arg frame_align_ts)" />
+    <rosparam param="neighbor_robots" subst_value="True">$(arg quad2)</rosparam>
+  </node>
+
+</launch>

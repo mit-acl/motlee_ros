@@ -24,8 +24,8 @@ def plot_map(msg):
             plt.plot(pose.position.x, pose.position.y, 'ko')
         
         # vicon gt
-        for pos in positions:
-            plt.plot(pos[0], pos[1], 'rx')
+        # for pos in positions:
+        #     plt.plot(pos[0], pos[1], 'rx')
 
         # plot
         plt.gca().set_aspect("equal")

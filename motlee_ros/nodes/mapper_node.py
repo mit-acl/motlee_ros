@@ -22,7 +22,7 @@ class Mapper:
         robot_id = rospy.get_param("~robot_id", "0")
         Q = rospy.get_param("~Q", [[.25**2, 0.], [0., .25**2]]) # process noise covariance
         P0 = rospy.get_param("~P0", [[.5**2, 0.], [0., .5**2]]) # initial estimate covariance
-        tau = rospy.get_param("~tau", 2.) # mahalanobis distance gate for landmark data association
+        tau = rospy.get_param("~tau", 0.2) # mahalanobis distance gate for landmark data association
         kappa = rospy.get_param("~kappa", 100) # number of timesteps to keep a landmark without new measurements before deleting
         nu = rospy.get_param("~nu", 3) # number of inital consecutive measurements required to create a new object
         self.dim = rospy.get_param("~dimension", 2) # 2 or 3 - dimension of landmarks
