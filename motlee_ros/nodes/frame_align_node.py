@@ -28,7 +28,7 @@ class FrameAlignerNode:
         self.neighbor_robots = rospy.get_param("~neighbor_robots", ["1", "2", "3"])
         ts = rospy.get_param("~ts", 1.) # frame-align frequency
         run_filter = rospy.get_param("~filter", True) # filter or take a single measurement
-        num_objs_req = rospy.get_param("~num_objs_req", 12) # number of associations required to perform frame alignment
+        num_objs_req = rospy.get_param("~num_objs_req", 10) # number of associations required to perform frame alignment
         clipper_eps = rospy.get_param("~clipper_eps", .4) # CLIPPER epsilon parameter
         clipper_sig = rospy.get_param("~clipper_sig", .4) # CLIPPER sigma parameter
 
