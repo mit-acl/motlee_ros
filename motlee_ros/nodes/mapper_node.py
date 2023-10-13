@@ -26,9 +26,11 @@ class Mapper:
         kappa = rospy.get_param("~kappa", 100) # number of timesteps to keep a landmark without new measurements before deleting
         nu = rospy.get_param("~nu", 3) # number of inital consecutive measurements required to create a new object
         self.dim = rospy.get_param("~dimension", 2) # 2 or 3 - dimension of landmarks
+        self.use_wh = rospy.get_param("~use_wh", False) # estimate width and height of object
+        self.dim_full = self.dim if not self.use_wh else self.dim + 2
 
         # Set up static landmark motion model
-        landmark_model = MotionModel(A=np.eye(self.dim), H=np.eye(self.dim), Q=Q, R=np.array([]), P0=P0)
+        landmark_model = MotionModel(A=np.eye(self.dim_full), H=np.eye(self.dim_full), Q=Q, R=np.array([]), P0=P0)
 
         # Set up mapper from MOTLEE
         self.mapper = MultiObjectTracker(
@@ -40,7 +42,8 @@ class Mapper:
             alpha=2000,
             kappa=kappa,
             nu=nu,
-            track_storage_size=1
+            track_storage_size=1,
+            dim_association=self.dim_full
         )
 
         # ROS communication
@@ -54,9 +57,11 @@ class Mapper:
         Args:
             dets_msg (motlee_msgs/ObjArray): landmark measurements and covariances in world frame
         """
-        
-        dets = [np.array([[det.position.x], [det.position.y], [det.position.z]])[:self.dim,:] for det in dets_msg.objects]
-        Rs = [np.array(obj.covariance).reshape((3,3))[:self.dim,:self.dim] for obj in dets_msg.objects]
+        dets = [np.array(
+            [det.position.x, det.position.y, det.position.z][:self.dim] + \
+            [det.width, det.height] if self.use_wh else []
+        ).reshape((self.dim_full,1)) for det in dets_msg.objects]
+        Rs = [np.array(obj.covariance).reshape((self.dim_full,self.dim_full)) for obj in dets_msg.objects]
         
         self.mapper.local_data_association(
             [det for det in dets], 
@@ -70,11 +75,14 @@ class Mapper:
 
         for landmark in self.mapper.tracks:
             obj = motlee_msgs.Obj()
-            obj.position.x, obj.position.y = landmark.state.reshape(-1)[:self.dim]
+            obj.id = landmark.id[1]
+            obj.position.x, obj.position.y = landmark.state.reshape(-1)[:2]
             obj.position.z = 0 if self.dim == 2 else landmark.state.item(2)
-            obj.covariance[0] = landmark.P[0,0]
-            obj.covariance[4] = landmark.P[1,1]
-            obj.covariance[8] = 0 if self.dim == 2 else landmark.P[2,2]
+            obj.covariance = landmark.P.reshape(-1)
+            obj.ell = landmark.ell - 1
+            if self.use_wh:
+                obj.width = landmark.state.item(self.dim)
+                obj.height = landmark.state.item(self.dim + 1)
             map.objects.append(obj)
 
         self.pub_map.publish(map)
@@ -84,6 +92,7 @@ class Mapper:
         for obj in map.objects:
             pose = geometry_msgs.Pose()
             pose.position = obj.position
+            # Make pose point straight up (just for a cleaner look in rviz)
             pose.orientation.x, pose.orientation.y, \
                 pose.orientation.z, pose.orientation.w = \
                 Rot.from_euler('xyz', [0., -90., 0.], degrees=True).as_quat()
