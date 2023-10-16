@@ -1,0 +1,3 @@
+[submodule "dependencies/motlee"]
+	path = dependencies/motlee
+	url = git@gitlab.com:mit-acl/dmot/motlee.git
