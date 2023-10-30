@@ -108,7 +108,7 @@ class FrameAlignerNode:
         # print(self.ldmrks_rec_odom)
         # TODO: use widths and heights to filter out putative associations
         # landmarks_KDTree is a KD tree in the odom0, so should transform ldmrks_rec_odom into odom0 before fetching
-        ldmrks_recent_odom0 = transform(self.T_odom0_odom, self.ldmrks_rec_odom)
+        ldmrks_recent_odom0 = transform(self.T_odom0_odom, self.ldmrks_rec_odom, stacked_axis=0)
         ii = self.ldmrks_saved_odom0_KD.query_ball_point(ldmrks_recent_odom0, r=radius)        
 
         # print("Indices: ", ii)
@@ -134,9 +134,9 @@ class FrameAlignerNode:
                 self.T_w_odom0[:3,3] = t
                 
                 # saved_landmarks are in the ODOM0 FRAME
-                self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world)
+                self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world, stacked_axis=0)
                 self.ldmrks_saved_odom0_KD = KDTree(self.ldmrks_saved_odom0)
-            except:
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 return
         if len(self.ldmrks_rec_odom) == 0:
             return
@@ -175,7 +175,7 @@ class FrameAlignerNode:
         #
         # update map storage
         landmarks = np.array([[o.position.x, o.position.y, o.position.z] for o in msg.objects])
-        self.ldmrks_rec_odom = transform(self.T_odom0_odom, landmarks)
+        self.ldmrks_rec_odom = transform(self.T_odom0_odom, landmarks, stacked_axis=0)
         self.ldmrks_rec_wh = np.array([[o.width, o.height] for o in msg.objects])
         self.ages = np.array([o.ell for o in msg.objects])
     
@@ -183,7 +183,7 @@ class FrameAlignerNode:
     def T_odom0_odom(self):
         """Transfrom from odom frame to odom0 frame
         """
-        self.frame_align_filter.transforms[self.robot_id]
+        return self.frame_align_filter.transforms[self.robot_id]
         
 
 
