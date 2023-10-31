@@ -6,6 +6,7 @@ from scipy.spatial import KDTree
 import message_filters
 import rospy
 import tf
+import tf2_ros
 
 import geometry_msgs.msg as geometry_msgs
 import motlee_msgs.msg as motlee_msgs
@@ -75,9 +76,12 @@ class FrameAlignerNode:
         # ROS communication
         # Assuming all maps are published to one place, and then each neighboring robot gets its own frame_align
         self.pub_fa =  rospy.Publisher(f'/{self.robot_id}/frame_align', motlee_msgs.SE3Transform, queue_size=10)
+        self.br = tf2_ros.TransformBroadcaster()
+        self.pub_saved_map = rospy.Publisher(f"/{self.robot_id}/saved_map", motlee_msgs.ObjArray, queue_size=10)
         self.sub_map = rospy.Subscriber(f'/{self.robot_id}/recent_map', motlee_msgs.ObjArray, self.map_cb, queue_size=10)
         self.timer = rospy.Timer(rospy.Duration(1), self.timer_cb)
         self.tf_listener = tf.TransformListener()
+        self._publish_tf()
 
         rospy.loginfo("Initialize frame alignment node.")
 
@@ -138,6 +142,8 @@ class FrameAlignerNode:
                 self.ldmrks_saved_odom0_KD = KDTree(self.ldmrks_saved_odom0)
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 return
+        self.pub_saved_map.publish(self._landmarks_to_msg(self.ldmrks_saved_odom0, self.ldmrks_saved_wh, "odom0"))
+            
         if len(self.ldmrks_rec_odom) == 0:
             return
         # print(self.ldmrks_saved_odom0.shape)
@@ -159,6 +165,7 @@ class FrameAlignerNode:
         T_msg.frame_src = self.robot_id
         T_msg.frame_dest = 'map'
         T_msg.header.stamp = rospy.Time.now()
+        self._publish_tf()
 
         self.pub_fa.publish(T_msg)
     
@@ -178,6 +185,43 @@ class FrameAlignerNode:
         self.ldmrks_rec_odom = transform(self.T_odom0_odom, landmarks, stacked_axis=0)
         self.ldmrks_rec_wh = np.array([[o.width, o.height] for o in msg.objects])
         self.ages = np.array([o.ell for o in msg.objects])
+        
+    def _landmarks_to_msg(self, landmarks, landmarks_wh, frame_id):
+        obj_array = motlee_msgs.ObjArray()
+        obj_array.header.frame_id = frame_id
+        obj_array.header.stamp = rospy.Time.now()
+        
+        for i, (landmark, wh) in enumerate(zip(landmarks, landmarks_wh)):
+            obj = motlee_msgs.Obj()
+            obj.id = i
+            obj.position.x = landmark[0]
+            obj.position.y = landmark[1]
+            obj.position.z = landmark[2]
+            obj.width = wh[0]
+            obj.height = wh[1]
+            obj_array.objects.append(obj)
+            
+        return obj_array
+    
+    def _publish_tf(self):
+        t = geometry_msgs.TransformStamped()
+        t.header.frame_id = "odom"
+        t.header.stamp = rospy.Time.now()
+        t.child_frame_id = "odom0"
+        T = self.T_odom0_odom
+        t.transform.translation.x = T[0,3]
+        t.transform.translation.y = T[1,3]
+        t.transform.translation.z = T[2,3]
+        
+        q = Rot.from_matrix(T[:3,:3]).as_quat()
+        t.transform.rotation.x = q[0]
+        t.transform.rotation.y = q[1]
+        t.transform.rotation.z = q[2]
+        t.transform.rotation.w = q[3]
+        
+        self.br.sendTransform(t)
+            
+            
     
     @property
     def T_odom0_odom(self):
