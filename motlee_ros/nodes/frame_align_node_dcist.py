@@ -23,7 +23,7 @@ from utils import pose_msg_2_T
 
 class FrameAlignerNode:
     """
-    Node used for aligning the odom0 initial odometry frame with the drifting odom frame using static landmarks.
+    Node used for aligning the world frame with the drifting odom frame using static landmarks.
     
     landmarks_saved denotes landmarks loaded from a saved map.
     landmarks_rec denote recently detected landmarks.
@@ -35,9 +35,9 @@ class FrameAlignerNode:
     |      > odometry
     F_odom
     |      > frame align (estimated by this node)
-    F_odom0
-    |      > odom init
     F_world
+    
+    T_odom_world is estimated using the odom0 initial guess frame
     
     """
     def __init__(self):
@@ -54,6 +54,8 @@ class FrameAlignerNode:
         # print(map_path)
         self.saved_map = self.read_map(map_path)
         self.ldmrks_saved_world, self.ldmrks_saved_wh = self.get_landmarks_info_from_map(self.saved_map)
+        self.ldmrks_saved_world_KD = KDTree(self.ldmrks_saved_world)
+        
 
         self.T_w_odom0 = None
         
@@ -70,7 +72,7 @@ class FrameAlignerNode:
             clipper_epsilon=clipper_eps,
             clipper_sigma=clipper_sig
         )
-        self.ldmrks_rec_odom = np.array([]) # recent landmarks in frame odom0
+        self.ldmrks_rec_odom = np.array([]) # recent landmarks in frame odom
         self.ages = np.array([])
 
         # ROS communication
@@ -111,9 +113,9 @@ class FrameAlignerNode:
     def filter_landmarks(self, radius=10.0, width_threshold=3.0, height_threshold=8.0):
         # print(self.ldmrks_rec_odom)
         # TODO: use widths and heights to filter out putative associations
-        # landmarks_KDTree is a KD tree in the odom0, so should transform ldmrks_rec_odom into odom0 before fetching
-        ldmrks_recent_odom0 = transform(self.T_odom0_odom, self.ldmrks_rec_odom, stacked_axis=0)
-        ii = self.ldmrks_saved_odom0_KD.query_ball_point(ldmrks_recent_odom0, r=radius)        
+        # landmarks_KDTree is a KD tree in the world, so should transform ldmrks_rec_odom into world before fetching
+        ldmrks_recent_world = transform(self.T_world_odom, self.ldmrks_rec_odom, stacked_axis=0)
+        ii = self.ldmrks_saved_world_KD.query_ball_point(ldmrks_recent_world, r=radius)        
 
         # print("Indices: ", ii)
         indices_filtered = []
@@ -126,37 +128,37 @@ class FrameAlignerNode:
 
         indices_filtered = list(set(indices_filtered))
         # print("Filtered indices: ", indices_filtered)
-        return self.ldmrks_saved_odom0[indices_filtered, :]
+        return self.ldmrks_saved_world[indices_filtered, :]
     
     def timer_cb(self, msg):
         if self.T_w_odom0 is None:
             try:
                 # TODO: rename when we figure out what we want the tf tree to look like exactly
+                # use T_w_odom0 to initialize frame_align_filter
                 (t, q) = self.tf_listener.lookupTransform('/world', '/odom0', rospy.Time(0))
                 self.T_w_odom0 = np.eye(4)
                 self.T_w_odom0[:3,:3] = Rot.from_quat(q).as_matrix()
                 self.T_w_odom0[:3,3] = t
+                self.frame_align_filter.transforms[self.robot_id] = self.T_w_odom0[:3,3]
                 
                 # saved_landmarks are in the ODOM0 FRAME
-                self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world, stacked_axis=0)
-                self.ldmrks_saved_odom0_KD = KDTree(self.ldmrks_saved_odom0)
+                # self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world, stacked_axis=0)
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
                 return
-        self.pub_saved_map.publish(self._landmarks_to_msg(self.ldmrks_saved_odom0, self.ldmrks_saved_wh, "odom0"))
+        self.pub_saved_map.publish(self._landmarks_to_msg(self.ldmrks_saved_world, self.ldmrks_saved_wh, "world"))
             
         if len(self.ldmrks_rec_odom) == 0:
             return
-        # print(self.ldmrks_saved_odom0.shape)
         print("Perceived landmarks num: ", self.ldmrks_rec_odom.shape)
 
-        landmarks_filtered = self.filter_landmarks()
-        print("Filtered landmarks num: ", landmarks_filtered.shape)
-        if len(landmarks_filtered) == 0:
+        landmarks_filtered_world = self.filter_landmarks()
+        print("Filtered landmarks num: ", landmarks_filtered_world.shape)
+        if len(landmarks_filtered_world) == 0:
             # print("No filtered result.")
             return
-        # we want transformation from odom to odom0
+        # we want transformation from odom to world
         # TODO: filter out width/height using putative associations
-        sol = self.frame_aligner.align_objects(static_objects=[landmarks_filtered, self.ldmrks_rec_odom])
+        sol = self.frame_aligner.align_objects(static_objects=[landmarks_filtered_world, self.ldmrks_rec_odom])
         print("Alignment result: ", sol)
         self.frame_align_filter.update_transform(self.robot_id, sol)
             
@@ -170,19 +172,10 @@ class FrameAlignerNode:
         self.pub_fa.publish(T_msg)
     
     def map_cb(self, msg):
-        # landmarks come in odom frame, we want to use them to estimate the transformation from odom frame to odom0 frame
-        #                 
-        #       F_robot
-        #       |      > odometry
-        #       F_odom
-        #       |      > frame align (estimated by this node)
-        #       F_odom0
-        #       |      > odom init
-        #       F_world
-        #
+        # landmarks come in odom frame
         # update map storage
         landmarks = np.array([[o.position.x, o.position.y, o.position.z] for o in msg.objects])
-        self.ldmrks_rec_odom = transform(self.T_odom0_odom, landmarks, stacked_axis=0)
+        self.ldmrks_rec_odom = landmarks
         self.ldmrks_rec_wh = np.array([[o.width, o.height] for o in msg.objects])
         self.ages = np.array([o.ell for o in msg.objects])
         
@@ -207,8 +200,8 @@ class FrameAlignerNode:
         t = geometry_msgs.TransformStamped()
         t.header.frame_id = "odom"
         t.header.stamp = rospy.Time.now()
-        t.child_frame_id = "odom0"
-        T = self.T_odom0_odom
+        t.child_frame_id = "world"
+        T = self.T_world_odom
         t.transform.translation.x = T[0,3]
         t.transform.translation.y = T[1,3]
         t.transform.translation.z = T[2,3]
@@ -224,8 +217,8 @@ class FrameAlignerNode:
             
     
     @property
-    def T_odom0_odom(self):
-        """Transfrom from odom frame to odom0 frame
+    def T_world_odom(self):
+        """Transform from odom frame to world frame
         """
         return self.frame_align_filter.transforms[self.robot_id]
         
