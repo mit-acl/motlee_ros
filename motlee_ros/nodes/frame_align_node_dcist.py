@@ -83,7 +83,6 @@ class FrameAlignerNode:
         self.sub_map = rospy.Subscriber(f'/{self.robot_id}/recent_map', motlee_msgs.ObjArray, self.map_cb, queue_size=10)
         self.timer = rospy.Timer(rospy.Duration(1), self.timer_cb)
         self.tf_listener = tf.TransformListener()
-        self._publish_tf()
 
         rospy.loginfo("Initialize frame alignment node.")
 
@@ -135,11 +134,11 @@ class FrameAlignerNode:
             try:
                 # TODO: rename when we figure out what we want the tf tree to look like exactly
                 # use T_w_odom0 to initialize frame_align_filter
-                (t, q) = self.tf_listener.lookupTransform('/world', '/odom0', rospy.Time(0))
+                (t, q) = self.tf_listener.lookupTransform('/odom0', '/world', rospy.Time(0))
                 self.T_w_odom0 = np.eye(4)
                 self.T_w_odom0[:3,:3] = Rot.from_quat(q).as_matrix()
                 self.T_w_odom0[:3,3] = t
-                self.frame_align_filter.transforms[self.robot_id] = self.T_w_odom0[:3,3]
+                self.frame_align_filter.transforms[self.robot_id] = self.T_w_odom0
                 
                 # saved_landmarks are in the ODOM0 FRAME
                 # self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world, stacked_axis=0)
@@ -148,6 +147,7 @@ class FrameAlignerNode:
         self.pub_saved_map.publish(self._landmarks_to_msg(self.ldmrks_saved_world, self.ldmrks_saved_wh, "world"))
             
         if len(self.ldmrks_rec_odom) == 0:
+            self._publish_tf()
             return
         print("Perceived landmarks num: ", self.ldmrks_rec_odom.shape)
 
@@ -155,6 +155,7 @@ class FrameAlignerNode:
         print("Filtered landmarks num: ", landmarks_filtered_world.shape)
         if len(landmarks_filtered_world) == 0:
             # print("No filtered result.")
+            self._publish_tf()
             return
         # we want transformation from odom to world
         # TODO: filter out width/height using putative associations
