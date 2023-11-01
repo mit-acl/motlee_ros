@@ -1,7 +1,7 @@
 <launch>
-  <arg name="robot_id" default="sparkal1" />
+  <arg name="robot_id" default="acl_jackal2" />
   <arg name="frame_align_ts" default="1" />
-  <arg name="map_path" default="/home/lucas/Documents/GitLab/dmot/motlee_ros/src/landmarks.txt"/>
+  <arg name="map_path" default="/home/lucas/Documents/GitLab/dmot/motlee_ros/src/sparkal2_gt_landmarks.txt"/>
   <node respawn="false" name="frame_aligner" pkg="motlee_ros" type="frame_align_node_dcist.py" output="screen">
     <param name="robot_id" value="$(arg robot_id)" />
     <param name="ts" value="$(arg frame_align_ts)" />

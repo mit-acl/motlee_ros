@@ -91,6 +91,7 @@ class FrameAlignerNode:
         landmarks = []
         landmarks_size = []
         for _, info in map.items():
+            # print(info)
             landmarks.append(info[2:])
             landmarks_size.append(info[0:2])
         return np.array(landmarks), np.array(landmarks_size)
@@ -114,6 +115,7 @@ class FrameAlignerNode:
         # TODO: use widths and heights to filter out putative associations
         # landmarks_KDTree is a KD tree in the world, so should transform ldmrks_rec_odom into world before fetching
         ldmrks_recent_world = transform(self.T_world_odom, self.ldmrks_rec_odom, stacked_axis=0)
+        # print(ldmrks_recent_world)
         ii = self.ldmrks_saved_world_KD.query_ball_point(ldmrks_recent_world, r=radius)        
 
         # print("Indices: ", ii)
@@ -134,7 +136,8 @@ class FrameAlignerNode:
             try:
                 # TODO: rename when we figure out what we want the tf tree to look like exactly
                 # use T_w_odom0 to initialize frame_align_filter
-                (t, q) = self.tf_listener.lookupTransform('/odom0', '/world', rospy.Time(0))
+                (t, q) = self.tf_listener.lookupTransform('/world', '/odom0', rospy.Time(0))
+                # print("Translation: ", t)
                 self.T_w_odom0 = np.eye(4)
                 self.T_w_odom0[:3,:3] = Rot.from_quat(q).as_matrix()
                 self.T_w_odom0[:3,3] = t
