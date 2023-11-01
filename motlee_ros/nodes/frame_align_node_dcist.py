@@ -91,7 +91,6 @@ class FrameAlignerNode:
         landmarks = []
         landmarks_size = []
         for _, info in map.items():
-            # print(info)
             landmarks.append(info[2:])
             landmarks_size.append(info[0:2])
         return np.array(landmarks), np.array(landmarks_size)
@@ -115,7 +114,6 @@ class FrameAlignerNode:
         # TODO: use widths and heights to filter out putative associations
         # landmarks_KDTree is a KD tree in the world, so should transform ldmrks_rec_odom into world before fetching
         ldmrks_recent_world = transform(self.T_world_odom, self.ldmrks_rec_odom, stacked_axis=0)
-        # print(ldmrks_recent_world)
         ii = self.ldmrks_saved_world_KD.query_ball_point(ldmrks_recent_world, r=radius)        
 
         # print("Indices: ", ii)
@@ -136,8 +134,8 @@ class FrameAlignerNode:
             try:
                 # TODO: rename when we figure out what we want the tf tree to look like exactly
                 # use T_w_odom0 to initialize frame_align_filter
+                # to /world from /odom0
                 (t, q) = self.tf_listener.lookupTransform('/world', '/odom0', rospy.Time(0))
-                # print("Translation: ", t)
                 self.T_w_odom0 = np.eye(4)
                 self.T_w_odom0[:3,:3] = Rot.from_quat(q).as_matrix()
                 self.T_w_odom0[:3,3] = t
@@ -164,7 +162,10 @@ class FrameAlignerNode:
         # TODO: filter out width/height using putative associations
         sol = self.frame_aligner.align_objects(static_objects=[landmarks_filtered_world, self.ldmrks_rec_odom])
         print("Alignment result: ", sol)
-        self.frame_align_filter.update_transform(self.robot_id, sol)
+        # TODO: should we filter results??
+        # self.frame_align_filter.update_transform(self.robot_id, sol)
+        if sol.success:
+            self.frame_align_filter.transforms[self.robot_id] = sol.transform
             
         T_msg = motlee_msgs.SE3Transform()
         T_msg.transform = self.frame_align_filter.transforms[self.robot_id].reshape(-1)
@@ -201,11 +202,11 @@ class FrameAlignerNode:
         return obj_array
     
     def _publish_tf(self):
-        t = geometry_msgs.TransformStamped()
-        t.header.frame_id = "odom"
-        t.header.stamp = rospy.Time.now()
-        t.child_frame_id = "world"
         T = self.T_world_odom
+        t = geometry_msgs.TransformStamped()
+        t.header.frame_id = "world" # into frame_id
+        t.header.stamp = rospy.Time.now()
+        t.child_frame_id = "odom"  # takes data from child_frame_id
         t.transform.translation.x = T[0,3]
         t.transform.translation.y = T[1,3]
         t.transform.translation.z = T[2,3]
