@@ -3,6 +3,8 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as Rot
 from scipy.spatial import KDTree
+from collections import defaultdict
+
 import message_filters
 import rospy
 import tf
@@ -46,7 +48,7 @@ class FrameAlignerNode:
         self.robot_id = rospy.get_param("~robot_id", "0")
         ts = rospy.get_param("~ts", 1.) # frame-align frequency
         run_filter = rospy.get_param("~filter", True) # filter or take a single measurement
-        num_objs_req = rospy.get_param("~num_objs_req", 10) # number of associations required to perform frame alignment
+        num_objs_req = rospy.get_param("~num_objs_req", 5) # number of associations required to perform frame alignment
         clipper_eps = rospy.get_param("~clipper_eps", .3) # CLIPPER epsilon parameter
         clipper_sig = rospy.get_param("~clipper_sig", .3) # CLIPPER sigma parameter
 
@@ -109,25 +111,37 @@ class FrameAlignerNode:
         f.close()
         return obj_map
 
-    def filter_landmarks(self, radius=10.0, width_threshold=3.0, height_threshold=8.0):
-        # print(self.ldmrks_rec_odom)
+    def filter_landmarks(self, radius=20.0, width_threshold=5.0, height_threshold=8.0):
+        # print("Perceived landmakrs: ", self.ldmrks_rec_odom)
         # TODO: use widths and heights to filter out putative associations
         # landmarks_KDTree is a KD tree in the world, so should transform ldmrks_rec_odom into world before fetching
         ldmrks_recent_world = transform(self.T_world_odom, self.ldmrks_rec_odom, stacked_axis=0)
-        ii = self.ldmrks_saved_world_KD.query_ball_point(ldmrks_recent_world, r=radius)        
+        print("Perceived landmakrs in world frame: ", ldmrks_recent_world)
+        candidate_landmarks_indices = self.ldmrks_saved_world_KD.query_ball_point(ldmrks_recent_world, r=radius)        
 
-        # print("Indices: ", ii)
-        indices_filtered = []
-        for i in range(len(np.array(ii))):
+        landmarks_pairing = defaultdict(list)
+
+        for i in range(len(np.array(candidate_landmarks_indices))):
+            # indx_i = []
             lm_size = self.ldmrks_rec_wh[i]
-            for j in ii[i]:
+            for j in candidate_landmarks_indices[i]:
                 obj_candidate_size = self.ldmrks_saved_wh[j]
                 if abs(lm_size[0] - obj_candidate_size[0]) < width_threshold and abs(lm_size[1] - obj_candidate_size[1]) < height_threshold:
-                    indices_filtered.append(j)
+                    # indx_i.append(j)
+                    landmarks_pairing[j].append(i)
 
-        indices_filtered = list(set(indices_filtered))
-        # print("Filtered indices: ", indices_filtered)
-        return self.ldmrks_saved_world[indices_filtered, :]
+        landmarks_filtered = []
+        putative_association = []
+        loop_index = 0
+        for k, v in landmarks_pairing.items():
+            landmarks_filtered.append(self.ldmrks_saved_world[k])
+            for i in v:
+                putative_association.append([loop_index, i])
+            loop_index +=1
+        # print("Putative Assoc: ", putative_association)
+        print("Filtered world landmarks: ", landmarks_filtered)
+        # print("Putative Assoc: ", putative_association)
+        return np.array(landmarks_filtered), np.array(putative_association)
     
     def timer_cb(self, msg):
         if self.T_w_odom0 is None:
@@ -140,7 +154,7 @@ class FrameAlignerNode:
                 self.T_w_odom0[:3,:3] = Rot.from_quat(q).as_matrix()
                 self.T_w_odom0[:3,3] = t
                 self.frame_align_filter.transforms[self.robot_id] = self.T_w_odom0
-                
+                # print("Odom0 to world: ", self.T_w_odom0)
                 # saved_landmarks are in the ODOM0 FRAME
                 # self.ldmrks_saved_odom0 = transform(np.linalg.inv(self.T_w_odom0), self.ldmrks_saved_world, stacked_axis=0)
             except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
@@ -152,7 +166,7 @@ class FrameAlignerNode:
             return
         print("Perceived landmarks num: ", self.ldmrks_rec_odom.shape)
 
-        landmarks_filtered_world = self.filter_landmarks()
+        landmarks_filtered_world, putative_association = self.filter_landmarks()
         print("Filtered landmarks num: ", landmarks_filtered_world.shape)
         if len(landmarks_filtered_world) == 0:
             # print("No filtered result.")
@@ -160,8 +174,8 @@ class FrameAlignerNode:
             return
         # we want transformation from odom to world
         # TODO: filter out width/height using putative associations
-        sol = self.frame_aligner.align_objects(static_objects=[landmarks_filtered_world, self.ldmrks_rec_odom])
-        print("Alignment result: ", sol)
+        sol = self.frame_aligner.align_objects(static_objects=[landmarks_filtered_world, self.ldmrks_rec_odom], static_put_assoc=putative_association)
+        print(sol)
         # TODO: should we filter results??
         # self.frame_align_filter.update_transform(self.robot_id, sol)
         if sol.success:
@@ -183,6 +197,7 @@ class FrameAlignerNode:
         self.ldmrks_rec_odom = landmarks
         self.ldmrks_rec_wh = np.array([[o.width, o.height] for o in msg.objects])
         self.ages = np.array([o.ell for o in msg.objects])
+        
         
     def _landmarks_to_msg(self, landmarks, landmarks_wh, frame_id):
         obj_array = motlee_msgs.ObjArray()
