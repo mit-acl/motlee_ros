@@ -37,3 +37,28 @@ def pose_msg_2_T(pose_msg):
     t = np.array([pose_msg.position.x, pose_msg.position.y, pose_msg.position.z])
     T = np.eye(4); T[:3,:3] = R.as_matrix(); T[:3,3] = t
     return T
+
+def xyz_2_pixel(xyz, K, axis=0):
+    """
+    Converts xyz point array to pixel coordinate array
+
+    Args:
+        xyz (np.array, shape=(3,n) or (n,3)): 3D coordinates in RDF camera coordinates
+        K (np.array, shape=(3,3)): camera intrinsic calibration matrix
+        axis (int, optional): 0 or 1, axis along which xyz coordinates are stacked. Defaults to 0.
+
+    Returns:
+        np.array, shape=(2,n) or (n,2): Pixel coordinates (x,y) in RDF camera coordinates
+    """
+    if axis == 0:
+        xyz_shaped = np.array(xyz).reshape((-1,3)).T
+    elif axis == 1:
+        xyz_shaped = np.array(xyz).reshape((3,-1))
+    else:
+        assert False, "only axis 0 or 1 supported"
+        
+    pixel = K @ xyz_shaped / xyz_shaped[2,:]
+    pixel = pixel[:2,:]
+    if axis == 0:
+        pixel = pixel.T
+    return pixel
