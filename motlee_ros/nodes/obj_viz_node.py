@@ -5,8 +5,10 @@ from numpy.linalg import inv
 
 import message_filters
 import rospy
+import tf
 import cv_bridge
 import cv2 as cv
+from scipy.spatial.transform import Rotation as Rot
 
 import nav_msgs.msg as nav_msgs
 import geometry_msgs.msg as geometry_msgs
@@ -26,6 +28,13 @@ class ObjVizNode:
         self.image_view = rospy.get_param('~image_view', True)
         self.marker_color = rospy.get_param('~marker_color', (.2, .2, .8))
         self.rdf = rospy.get_param('~rdf', False) # camera frame convention
+        self.frame = rospy.get_param('~frame', 'acl_jackal2/velodyne_link') # Perform transformation from frame to obj_arr
+        self.T_view_obj = np.eye(4)
+        self.tf_listener = tf.TransformListener()
+        
+        # print("Self frame: ", self.frame)
+        # print("Obj array frame: ", "acl_jackal2/odom")
+            
         if pose_type_str == "Odometry":
             self.pose_type = nav_msgs.Odometry
         elif pose_type_str == "PoseStamped":
@@ -60,6 +69,7 @@ class ObjVizNode:
             msg_img, msg_cam_info, msg_pose, msg_objs = msgs
         else:
             msg_objs,  = msgs
+
             
         if self.image_view:
             img = self.bridge.compressed_imgmsg_to_cv2(msg_img, desired_encoding='bgr8')
@@ -91,10 +101,21 @@ class ObjVizNode:
             self.pub_img.publish(img_msg)
         
         marker_arr = visualization_msgs.MarkerArray()
+        self.obj_array_frame = msg_objs.header.frame_id
+        print("Object frame: ", msg_objs.header.frame_id)
+        if self.frame != self.obj_array_frame:
+            try:
+                (t, q) = self.tf_listener.lookupTransform(self.frame, self.obj_array_frame, rospy.Time(0))
+                self.T_view_obj[:3,:3] = Rot.from_quat(q).as_matrix()
+                self.T_view_obj[:3,3] = t
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                print("Didn't find tf.")
+                
         for obj in msg_objs.objects:
             marker = visualization_msgs.Marker()
             # TODO: fix id
             marker.header = msg_objs.header
+            marker.header.frame_id = self.frame
             marker.header.stamp = rospy.Time.now()
             marker.id = obj.id
             marker.type = marker.CYLINDER
@@ -113,10 +134,14 @@ class ObjVizNode:
             # TODO: object map right now is reported to be in camera frame... this is not true, we should get the tf worked out so that
             # object_measurements are published from fastsam3d in the map frame or something
             # point_c = transform(inv(self.T_BC) @ inv(pose_msg_2_T(msg_pose.pose)), np.array([obj.position.x, obj.position.y, obj.position.z]))
-            point = np.array([obj.position.x, obj.position.y, obj.position.z])
-            marker.pose.position.x = point[0]
-            marker.pose.position.y = point[1]
-            marker.pose.position.z = point[2]
+            point_cam = np.array([obj.position.x, obj.position.y, obj.position.z])
+
+            point_cam_hom = np.array([point_cam[0], point_cam[1], point_cam[2], 1])
+            point_map = np.dot(self.T_view_obj, point_cam_hom)
+
+            marker.pose.position.x = point_map[0]
+            marker.pose.position.y = point_map[1]
+            marker.pose.position.z = point_map[2]
             if self.rdf:
                 marker.pose.orientation.w = np.sqrt(2)/2
                 marker.pose.orientation.x = np.sqrt(2)/2
