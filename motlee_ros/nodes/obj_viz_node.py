@@ -26,11 +26,15 @@ class ObjVizNode:
         self.T_BC = T_FLURDF # should make a parameter
         pose_type_str = rospy.get_param('~pose_type', 'Odometry')
         self.image_view = rospy.get_param('~image_view', True)
-        self.marker_color = rospy.get_param('~marker_color', (.2, .2, .8))
         self.rdf = rospy.get_param('~rdf', False) # camera frame convention
         self.frame = rospy.get_param('~frame', 'acl_jackal2/velodyne_link') # Perform transformation from frame to obj_arr
         self.T_view_obj = np.eye(4)
         self.tf_listener = tf.TransformListener()
+
+        # Visualization params
+        self.marker_color = rospy.get_param('~marker_color', (.2, .2, .8))
+        self.large_obj_width = rospy.get_param('~large_obj_width', 5.)
+        self.large_obj_opacity = rospy.get_param('~large_obj_opacity', 0.1)
         
         # print("Self frame: ", self.frame)
         # print("Obj array frame: ", "acl_jackal2/odom")
@@ -116,7 +120,7 @@ class ObjVizNode:
             # TODO: fix id
             marker.header = msg_objs.header
             marker.header.frame_id = self.frame
-            marker.header.stamp = rospy.Time.now()
+            # marker.header.stamp = rospy.Time.now()
             marker.id = obj.id
             marker.type = marker.CYLINDER
             marker.action = marker.ADD
@@ -125,7 +129,7 @@ class ObjVizNode:
             marker.scale.z = obj.height
             marker.lifetime = rospy.Duration.from_sec(1.0)
             marker.frame_locked = 1
-            marker.color.a = 1
+            marker.color.a = 1 if obj.width < self.large_obj_width else self.large_obj_opacity
             marker.color.r = self.marker_color[0]
             marker.color.g = self.marker_color[1]
             marker.color.b = self.marker_color[2]
