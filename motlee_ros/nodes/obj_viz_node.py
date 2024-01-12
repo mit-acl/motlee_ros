@@ -23,12 +23,14 @@ class ObjVizNode:
     def __init__(self):
         
         # ROS Parameters
-        self.T_BC = T_FLURDF # should make a parameter
+        # self.T_BC = T_FLURDF # should make a parameter
+        self.T_BC = np.eye(4) # TODO: should make a parameter
         pose_type_str = rospy.get_param('~pose_type', 'Odometry')
         self.image_view = rospy.get_param('~image_view', True)
         self.rdf = rospy.get_param('~rdf', False) # camera frame convention
         self.frame = rospy.get_param('~frame', 'acl_jackal2/velodyne_link') # Perform transformation from frame to obj_arr
         self.T_view_obj = np.eye(4)
+        self.ref_point_loc = rospy.get_param('~ref_point_loc', 'bottom_center')
         self.tf_listener = tf.TransformListener()
 
         # Visualization params
@@ -79,6 +81,10 @@ class ObjVizNode:
             img = self.bridge.compressed_imgmsg_to_cv2(msg_img, desired_encoding='bgr8')
             
             K = np.array(msg_cam_info.K).reshape((3,3))
+            if self.pose_type == "PoseStamped":
+                T_WB = pose_msg_2_T(msg_pose.pose) 
+            else: 
+                T_WB = pose_msg_2_T(msg_pose.pose.pose)
             
             rect_color = (255, 0, 0)
             rect_thickness = 2
@@ -87,9 +93,13 @@ class ObjVizNode:
                 w = obj.width
                 h = obj.height
                 # point_b = transform(inv(pose_msg_2_T(msg_pose.pose)), np.array([obj.position.x, obj.position.y, obj.position.z]))
-                point_c = transform(inv(self.T_BC) @ inv(pose_msg_2_T(msg_pose.pose)), np.array([obj.position.x, obj.position.y, obj.position.z]))
-                point_c_ll = point_c + np.array([-w/2, h/2, 0]) # lower left
-                point_c_ur = point_c + np.array([w/2, -h/2, 0]) # upper right
+                point_c = transform(inv(self.T_BC) @ inv(T_WB), np.array([obj.position.x, obj.position.y, obj.position.z]))
+                if self.ref_point_loc == "center":
+                    point_c_ll = point_c + np.array([-w/2, h/2, 0]) # lower left
+                    point_c_ur = point_c + np.array([w/2, -h/2, 0]) # upper right
+                elif self.ref_point_loc == "bottom_center":
+                    point_c_ll = point_c + np.array([-w/2, 0., 0]) # lower left
+                    point_c_ur = point_c + np.array([w/2, -h, 0]) # upper right
                 if point_c_ll.item(2) > 0:
                     bbox_ll = xyz_2_pixel(point_c_ll, K).reshape(-1)
                     bbox_ur = xyz_2_pixel(point_c_ur, K).reshape(-1)
@@ -99,6 +109,7 @@ class ObjVizNode:
                                     bbox_ur.astype(np.int32),
                                     color=rect_color,
                                     thickness=rect_thickness)
+                    img = cv.putText(img, str(obj.id), (bbox_ll + np.array([10., 10.])).astype(np.int32), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                     
             img_msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
             img_msg.header = msg_objs.header
@@ -145,7 +156,7 @@ class ObjVizNode:
 
             marker.pose.position.x = point_map[0]
             marker.pose.position.y = point_map[1]
-            marker.pose.position.z = point_map[2]
+            marker.pose.position.z = point_map[2] + obj.height/2 if self.ref_point_loc == 'bottom_center' else 0.0
             if self.rdf:
                 marker.pose.orientation.w = np.sqrt(2)/2
                 marker.pose.orientation.x = np.sqrt(2)/2
