@@ -1,10 +1,10 @@
 <launch>
 <!-- <remap from="objects" to="saved_map" /> -->
 <!-- <remap from="object_viz/markers" to="saved_map_viz/markers" /> -->
-    <remap from="image_raw/compressed" to="/RR04/d455/color/image_raw/compressed" />
-    <remap from="camera_info" to="/RR04/d455/color/camera_info" />
-    <remap from="pose" to="/RR04/world" />
-    <remap from="objects" to="/RR04/objects" />
+    <remap from="image_raw/compressed" to="/RR01/d455/color/image_raw/compressed" />
+    <remap from="camera_info" to="/RR01/d455/color/camera_info" />
+    <remap from="pose" to="/RR01/world" />
+    <remap from="objects" to="/RR01/objects" />
     <node respawn="false" name="obj_viz" pkg="motlee_ros" type="obj_viz_node.py" output="screen">
         <param name="pose_type" value="PoseStamped" />
         <param name="image_view" value="False" />

@@ -118,13 +118,13 @@ class ObjVizNode:
         marker_arr = visualization_msgs.MarkerArray()
         self.obj_array_frame = msg_objs.header.frame_id
         print("Object frame: ", msg_objs.header.frame_id)
-        if self.frame != self.obj_array_frame:
-            try:
-                (t, q) = self.tf_listener.lookupTransform(self.frame, self.obj_array_frame, rospy.Time(0))
-                self.T_view_obj[:3,:3] = Rot.from_quat(q).as_matrix()
-                self.T_view_obj[:3,3] = t
-            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-                print("Didn't find tf.")
+        # if self.frame != self.obj_array_frame:
+        #     try:
+        #         (t, q) = self.tf_listener.lookupTransform(self.frame, self.obj_array_frame, rospy.Time(0))
+        #         self.T_view_obj[:3,:3] = Rot.from_quat(q).as_matrix()
+        #         self.T_view_obj[:3,3] = t
+        #     except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        #         print("Didn't find tf.")
                 
         for obj in msg_objs.objects:
             marker = visualization_msgs.Marker()
