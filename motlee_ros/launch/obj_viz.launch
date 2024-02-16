@@ -8,7 +8,7 @@
     <node respawn="false" name="obj_viz" pkg="motlee_ros" type="obj_viz_node.py" output="screen">
         <param name="pose_type" value="PoseStamped" />
         <param name="image_view" value="False" />
-        <param name="frame" value="d455_color_optical_frame" />
+        <param name="frame" value="world" />
         <rosparam param="marker_color" subst_value="True">[0.6, 0.6, 0.6]</rosparam>
         <!-- <param name="large_obj_width" value="$(arg large_obj_width)" /> -->
     </node>
