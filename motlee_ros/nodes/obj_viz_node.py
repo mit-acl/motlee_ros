@@ -30,7 +30,7 @@ class ObjVizNode:
         self.rdf = rospy.get_param('~rdf', False) # camera frame convention
         self.frame = rospy.get_param('~frame', 'acl_jackal2/velodyne_link') # Perform transformation from frame to obj_arr
         self.T_view_obj = np.eye(4)
-        self.ref_point_loc = rospy.get_param('~ref_point_loc', 'bottom_center')
+        self.ref_point_loc = rospy.get_param('~ref_point_loc', 'center')
         self.tf_listener = tf.TransformListener()
 
         # Visualization params
