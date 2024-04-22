@@ -23,8 +23,7 @@ class ObjVizNode:
     def __init__(self):
         
         # ROS Parameters
-        # self.T_BC = T_FLURDF # should make a parameter
-        self.T_BC = np.eye(4) # TODO: should make a parameter
+        self.T_BC = np.array(rospy.get_param('~T_BC', np.eye(4).tolist())).reshape((4,4))
         pose_type_str = rospy.get_param('~pose_type', 'Odometry')
         self.image_view = rospy.get_param('~image_view', True)
         self.rdf = rospy.get_param('~rdf', False) # camera frame convention
@@ -51,7 +50,7 @@ class ObjVizNode:
 
         # ROS subscribers
         self.subs = [
-            message_filters.Subscriber('image_raw/compressed', sensor_msgs.CompressedImage),
+            message_filters.Subscriber('image_raw', sensor_msgs.Image),
             message_filters.Subscriber('camera_info', sensor_msgs.CameraInfo),
             message_filters.Subscriber('pose', self.pose_type),
             message_filters.Subscriber('objects', motlee_msgs.ObjArray),
@@ -78,10 +77,10 @@ class ObjVizNode:
 
             
         if self.image_view:
-            img = self.bridge.compressed_imgmsg_to_cv2(msg_img, desired_encoding='bgr8')
+            img = self.bridge.imgmsg_to_cv2(msg_img, desired_encoding='bgr8')
             
             K = np.array(msg_cam_info.K).reshape((3,3))
-            if self.pose_type == "PoseStamped":
+            if self.pose_type == geometry_msgs.PoseStamped:
                 T_WB = pose_msg_2_T(msg_pose.pose) 
             else: 
                 T_WB = pose_msg_2_T(msg_pose.pose.pose)
